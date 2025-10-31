@@ -71,6 +71,9 @@ class DiskMigrationApp(ctk.CTk):
         self.log(f"⚡ 已启用 {self.startup_workers} 线程并行扫描")
         self.log("💡 快捷键: Ctrl+A全选 | Ctrl+D取消 | F5刷新 | Ctrl+Z撤销")
         
+        # 首次启动欢迎弹窗
+        self.show_first_run_dialog()
+        
         # 自动开始扫描
         self.after(100, self.quick_scan)
     
@@ -998,6 +1001,208 @@ class DiskMigrationApp(ctk.CTk):
             return 15
         else:
             return 20
+    
+    def show_first_run_dialog(self):
+        """显示首次启动欢迎弹窗"""
+        # 检查是否已显示过
+        flag_file = ".first_run_shown"
+        if os.path.exists(flag_file):
+            return  # 已显示过，直接返回
+        
+        # 创建自定义弹窗
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("欢迎使用 - 磁盘迁移工具 Pro")
+        dialog.geometry("720x750")
+        dialog.resizable(False, False)
+        
+        # 居中显示
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (720 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (750 // 2)
+        dialog.geometry(f"720x750+{x}+{y}")
+        
+        # 设置为模态对话框
+        dialog.transient(self)
+        dialog.grab_set()
+        
+        # 处理关闭事件（只有点击X时才创建标记文件）
+        def on_closing():
+            try:
+                with open(flag_file, 'w') as f:
+                    f.write("shown")
+            except:
+                pass
+            dialog.destroy()
+        
+        dialog.protocol("WM_DELETE_WINDOW", on_closing)
+        
+        # 标题
+        title_label = ctk.CTkLabel(
+            dialog,
+            text="💾 磁盘迁移工具 Pro",
+            font=ctk.CTkFont(size=28, weight="bold")
+        )
+        title_label.pack(pady=(20, 5))
+        
+        subtitle_label = ctk.CTkLabel(
+            dialog,
+            text="欢迎使用！",
+            font=ctk.CTkFont(size=14),
+            text_color="gray"
+        )
+        subtitle_label.pack(pady=(0, 10))
+        
+        # 开发者信息容器（横向三列布局）
+        info_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        info_frame.pack(pady=5, padx=50, fill="x")
+        
+        # 第一列：开发者信息
+        dev_col = ctk.CTkFrame(info_frame, fg_color="transparent")
+        dev_col.pack(side="left", fill="both", expand=True, padx=5)
+        
+        dev_label = ctk.CTkLabel(
+            dev_col,
+            text="🧑‍💻 开发者",
+            font=ctk.CTkFont(size=14, weight="bold")
+        )
+        dev_label.pack(pady=(0, 5))
+        
+        dev_info = ctk.CTkLabel(
+            dev_col,
+            text="wan",
+            font=ctk.CTkFont(size=12)
+        )
+        dev_info.pack()
+        
+        # 第二列：联系方式
+        contact_col = ctk.CTkFrame(info_frame, fg_color="transparent")
+        contact_col.pack(side="left", fill="both", expand=True, padx=5)
+        
+        contact_label = ctk.CTkLabel(
+            contact_col,
+            text="📧 联系方式",
+            font=ctk.CTkFont(size=14, weight="bold")
+        )
+        contact_label.pack(pady=(0, 5))
+        
+        email_label = ctk.CTkLabel(
+            contact_col,
+            text="263257193@qq.com",
+            font=ctk.CTkFont(size=11)
+        )
+        email_label.pack()
+        
+        # 第三列：开源项目
+        github_col = ctk.CTkFrame(info_frame, fg_color="transparent")
+        github_col.pack(side="left", fill="both", expand=True, padx=5)
+        
+        github_label = ctk.CTkLabel(
+            github_col,
+            text="🌟 开源项目",
+            font=ctk.CTkFont(size=14, weight="bold")
+        )
+        github_label.pack(pady=(0, 5))
+        
+        # GitHub链接按钮
+        def open_github():
+            import webbrowser
+            webbrowser.open("https://github.com/bjfwan/windows-disk-tool")
+        
+        github_btn = ctk.CTkButton(
+            github_col,
+            text="访问GitHub",
+            command=open_github,
+            width=140,
+            height=28,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color=("blue", "darkblue")
+        )
+        github_btn.pack()
+        
+        # 赞助信息容器（独立区域）
+        sponsor_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        sponsor_frame.pack(pady=12, padx=50, fill="both", expand=True)
+        
+        sponsor_label = ctk.CTkLabel(
+            sponsor_frame,
+            text="💖 支持开发",
+            font=ctk.CTkFont(size=18, weight="bold")
+        )
+        sponsor_label.pack(pady=(0, 5))
+        
+        sponsor_info = ctk.CTkLabel(
+            sponsor_frame,
+            text="如果这个工具帮到了你，欢迎支持开发者！",
+            font=ctk.CTkFont(size=13)
+        )
+        sponsor_info.pack(pady=(0, 8))
+        
+        # 收款码图片显示 - 居中对称布局
+        qr_frame = ctk.CTkFrame(sponsor_frame, fg_color="transparent")
+        qr_frame.pack(pady=5)
+        
+        try:
+            from PIL import Image
+            
+            # 微信收款码 - 竖向矩形 3:4 比例
+            if os.path.exists("wechat.jpg"):
+                wechat_img = Image.open("wechat.jpg")
+                wechat_img = wechat_img.resize((210, 280), Image.Resampling.LANCZOS)
+                wechat_photo = ctk.CTkImage(light_image=wechat_img, dark_image=wechat_img, size=(210, 280))
+                
+                wechat_container = ctk.CTkFrame(qr_frame, fg_color="transparent")
+                wechat_container.pack(side="left", padx=20)
+                
+                wechat_label = ctk.CTkLabel(wechat_container, image=wechat_photo, text="")
+                wechat_label.pack()
+                
+                wechat_text = ctk.CTkLabel(
+                    wechat_container, 
+                    text="微信赞赏", 
+                    font=ctk.CTkFont(size=15, weight="bold")
+                )
+                wechat_text.pack(pady=(10, 0))
+            
+            # 支付宝收款码 - 竖向矩形 3:4 比例
+            if os.path.exists("apliy.jpg"):
+                alipay_img = Image.open("apliy.jpg")
+                alipay_img = alipay_img.resize((210, 280), Image.Resampling.LANCZOS)
+                alipay_photo = ctk.CTkImage(light_image=alipay_img, dark_image=alipay_img, size=(210, 280))
+                
+                alipay_container = ctk.CTkFrame(qr_frame, fg_color="transparent")
+                alipay_container.pack(side="left", padx=20)
+                
+                alipay_label = ctk.CTkLabel(alipay_container, image=alipay_photo, text="")
+                alipay_label.pack()
+                
+                alipay_text = ctk.CTkLabel(
+                    alipay_container, 
+                    text="支付宝打赏", 
+                    font=ctk.CTkFont(size=15, weight="bold")
+                )
+                alipay_text.pack(pady=(10, 0))
+        
+        except Exception as e:
+            # 如果图片加载失败，显示文字说明
+            fallback_label = ctk.CTkLabel(
+                sponsor_frame,
+                text="收款码图片：wechat.jpg | apliy.jpg",
+                font=ctk.CTkFont(size=11),
+                text_color="gray"
+            )
+            fallback_label.pack(pady=5)
+        
+        # 底部提示
+        separator = ctk.CTkFrame(dialog, height=1, fg_color="gray30")
+        separator.pack(fill="x", padx=50, pady=(10, 8))
+        
+        tip_label = ctk.CTkLabel(
+            dialog,
+            text="💡 此弹窗仅在首次启动时显示，关闭窗口即可开始使用",
+            font=ctk.CTkFont(size=11),
+            text_color="gray"
+        )
+        tip_label.pack(pady=(5, 15))
 
 def main():
     app = DiskMigrationApp()

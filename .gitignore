@@ -44,6 +44,7 @@ desktop.ini
 # Project Specific
 scan_cache.json
 move_history.json
+.first_run_shown
 
 # Temporary files
 *.log
