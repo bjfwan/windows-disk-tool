@@ -18,16 +18,24 @@
 
 ## 📥 下载安装
 
-### 方式一：下载exe文件（推荐）
+### 方式一：下载完整包（推荐）
 
-**最新版本下载**：[DiskMigrationToolPro.exe](../../releases/latest)
+**最新版本下载**：[Removewan.zip](../../releases/latest)
 
-下载后双击即可运行，**无需安装任何环境！**
+**📦 使用步骤：**
+1. 下载 `Removewan.zip` 文件（约26MB）
+2. **右键解压到任意文件夹**（不要直接双击运行）
+3. 进入解压后的文件夹
+4. 双击 `DiskMigrationToolPro.exe` 运行
 
-- ✅ 单文件，绿色免安装
-- ✅ 无需安装Python
-- ✅ 无需安装依赖库
-- ✅ 约26MB大小
+**⚠️ 重要：必须先解压再运行！**
+- ❌ 不要在压缩包内直接运行exe
+- ✅ 解压后包含收款码图片，首次启动欢迎弹窗可正常显示
+
+**包含内容：**
+- ✅ `DiskMigrationToolPro.exe` - 主程序
+- ✅ `wechat.jpg` - 微信收款码
+- ✅ `apliy.jpg` - 支付宝收款码
 
 ### 方式二：运行源代码（开发者）
 
@@ -91,10 +99,12 @@ python main.py
 
 ### 第一步：启动程序
 
-- **exe版本**：双击 `DiskMigrationToolPro.exe`
+- **压缩包版本**：先解压zip文件，再双击 `DiskMigrationToolPro.exe`
 - **源码版本**：运行 `python main.py`
 
 💡 **建议**：右键选择"以管理员身份运行"以获得完整功能
+
+⚠️ **重要提醒**：务必先解压zip文件，否则收款码图片无法显示！
 
 ### 第二步：自动扫描
 
