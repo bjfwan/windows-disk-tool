@@ -302,10 +302,11 @@ class FileMover:
                     return False
             
             # 使用所有可用线程进行并行复制
+            from concurrent.futures import as_completed
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 futures = [executor.submit(copy_one_file, f) for f in all_files]
                 
-                for future in futures:
+                for future in as_completed(futures):
                     if future.result():
                         completed += 1
                         # 降低进度更新频率，减少UI卡顿

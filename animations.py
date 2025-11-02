@@ -1,272 +1,201 @@
 """
-动画效果模块 - C3增强功能
-提供各种UI动画效果
+UI动画效果模块
+提供平滑的过渡动画和视觉反馈
 """
-
 import customtkinter as ctk
 from typing import Callable, Optional
+import threading
+import time
+
 
 class AnimationHelper:
-    """动画辅助类"""
+    """动画辅助类 - 提供各种动画效果"""
     
     @staticmethod
-    def fade_in(widget, duration_ms: int = 300, steps: int = 10):
-        """淡入动画
+    def animate_number(widget, start_value: float, end_value: float, 
+                      duration: float = 0.5, format_func: Optional[Callable] = None):
+        """
+        数字变化动画
         
         Args:
-            widget: 要动画的控件
-            duration_ms: 动画持续时间（毫秒）
-            steps: 动画步数
+            widget: CTkLabel组件
+            start_value: 起始值
+            end_value: 结束值
+            duration: 动画时长（秒）
+            format_func: 格式化函数，如lambda x: f"{x:.2f} GB"
         """
-        step_delay = duration_ms // steps
-        alpha_step = 1.0 / steps
-        
-        def animate(current_step=0):
-            if current_step >= steps:
-                return
+        def animate():
+            steps = 30  # 30帧动画
+            step_duration = duration / steps
+            step_value = (end_value - start_value) / steps
             
-            alpha = alpha_step * (current_step + 1)
-            try:
-                # CustomTkinter不直接支持透明度，使用位置动画替代
-                widget.lift()
-                widget.after(step_delay, lambda: animate(current_step + 1))
-            except:
-                pass
-        
-        animate()
-    
-    @staticmethod
-    def slide_in(widget, duration_ms: int = 300, from_x: int = 50):
-        """滑入动画
-        
-        Args:
-            widget: 要动画的控件
-            duration_ms: 动画持续时间（毫秒）
-            from_x: 起始X偏移量
-        """
-        steps = 15
-        step_delay = duration_ms // steps
-        x_step = from_x / steps
-        
-        # 保存原始位置
-        original_x = widget.winfo_x()
-        
-        def animate(current_step=0):
-            if current_step >= steps:
-                return
-            
-            offset = from_x - (x_step * current_step)
-            try:
-                widget.place(x=original_x + offset)
-                widget.after(step_delay, lambda: animate(current_step + 1))
-            except:
-                pass
-        
-        animate()
-    
-    @staticmethod
-    def pulse_effect(widget, duration_ms: int = 500, scale_factor: float = 1.05):
-        """脉冲效果（缩放动画）
-        
-        Args:
-            widget: 要动画的控件
-            duration_ms: 动画持续时间（毫秒）
-            scale_factor: 缩放因子
-        """
-        steps = 10
-        step_delay = duration_ms // (steps * 2)
-        
-        try:
-            original_width = widget.winfo_width()
-            original_height = widget.winfo_height()
-        except:
-            return
-        
-        def animate(current_step=0, expanding=True):
-            if current_step >= steps and not expanding:
-                return
-            
-            if current_step >= steps:
-                expanding = False
-                current_step = 0
-            
-            try:
-                if expanding:
-                    scale = 1.0 + ((scale_factor - 1.0) * current_step / steps)
-                else:
-                    scale = scale_factor - ((scale_factor - 1.0) * current_step / steps)
+            current_value = start_value
+            for _ in range(steps):
+                current_value += step_value
+                display_text = format_func(current_value) if format_func else f"{current_value:.2f}"
                 
-                new_width = int(original_width * scale)
-                new_height = int(original_height * scale)
-                
-                widget.configure(width=new_width, height=new_height)
-                widget.after(step_delay, lambda: animate(current_step + 1, expanding))
-            except:
-                pass
-        
-        animate()
-    
-    @staticmethod
-    def progress_bar_animation(progress_bar, target_value: float, duration_ms: int = 500):
-        """进度条动画
-        
-        Args:
-            progress_bar: CTkProgressBar控件
-            target_value: 目标值（0-1）
-            duration_ms: 动画持续时间（毫秒）
-        """
-        steps = 20
-        step_delay = duration_ms // steps
-        
-        try:
-            current_value = progress_bar.get()
-        except:
-            current_value = 0
-        
-        value_step = (target_value - current_value) / steps
-        
-        def animate(current_step=0):
-            if current_step >= steps:
-                progress_bar.set(target_value)
-                return
-            
-            new_value = current_value + (value_step * (current_step + 1))
-            try:
-                progress_bar.set(new_value)
-                progress_bar.after(step_delay, lambda: animate(current_step + 1))
-            except:
-                pass
-        
-        animate()
-    
-    @staticmethod
-    def button_ripple(button, duration_ms: int = 300):
-        """按钮波纹效果
-        
-        Args:
-            button: CTkButton控件
-            duration_ms: 动画持续时间（毫秒）
-        """
-        try:
-            original_color = button.cget("fg_color")
-            hover_color = button.cget("hover_color")
-            
-            # 快速切换到hover颜色再恢复
-            button.configure(fg_color=hover_color)
-            button.after(duration_ms, lambda: button.configure(fg_color=original_color))
-        except:
-            pass
-    
-    @staticmethod
-    def shake_widget(widget, duration_ms: int = 500, intensity: int = 5):
-        """摇晃动画（错误提示）
-        
-        Args:
-            widget: 要动画的控件
-            duration_ms: 动画持续时间（毫秒）
-            intensity: 摇晃强度（像素）
-        """
-        steps = 10
-        step_delay = duration_ms // steps
-        
-        try:
-            original_x = widget.winfo_x()
-        except:
-            return
-        
-        offsets = [intensity, -intensity, intensity, -intensity, intensity // 2, -intensity // 2, 0]
-        
-        def animate(current_step=0):
-            if current_step >= len(offsets):
                 try:
-                    widget.place(x=original_x)
+                    widget.after(0, lambda t=display_text: widget.configure(text=t))
                 except:
-                    pass
-                return
-            
-            try:
-                widget.place(x=original_x + offsets[current_step])
-                widget.after(step_delay, lambda: animate(current_step + 1))
-            except:
-                pass
-        
-        animate()
-    
-    @staticmethod
-    def rotate_text(label, texts: list, interval_ms: int = 2000):
-        """文本轮换动画
-        
-        Args:
-            label: CTkLabel控件
-            texts: 文本列表
-            interval_ms: 切换间隔（毫秒）
-        """
-        current_index = 0
-        
-        def animate():
-            nonlocal current_index
-            try:
-                label.configure(text=texts[current_index])
-                current_index = (current_index + 1) % len(texts)
-                label.after(interval_ms, animate)
-            except:
-                pass
-        
-        animate()
-    
-    @staticmethod
-    def loading_spinner(label, duration_ms: int = 100):
-        """加载旋转动画
-        
-        Args:
-            label: CTkLabel控件
-            duration_ms: 旋转间隔（毫秒）
-        """
-        spinners = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-        current_index = 0
-        
-        def animate():
-            nonlocal current_index
-            try:
-                current_text = label.cget("text")
-                # 保留原文本，只更新前面的spinner
-                if any(s in current_text for s in spinners):
-                    # 已有spinner，替换它
-                    for s in spinners:
-                        current_text = current_text.replace(s, spinners[current_index])
-                    label.configure(text=current_text)
-                else:
-                    # 添加spinner
-                    label.configure(text=f"{spinners[current_index]} {current_text}")
+                    break  # widget已销毁
                 
-                current_index = (current_index + 1) % len(spinners)
-                label.after(duration_ms, animate)
+                time.sleep(step_duration)
+            
+            # 确保最终值准确
+            final_text = format_func(end_value) if format_func else f"{end_value:.2f}"
+            try:
+                widget.after(0, lambda: widget.configure(text=final_text))
             except:
                 pass
         
-        animate()
-
-class AnimatedButton(ctk.CTkButton):
-    """带动画效果的按钮"""
+        threading.Thread(target=animate, daemon=True).start()
     
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    @staticmethod
+    def fade_in(widget, duration: float = 0.3):
+        """
+        淡入动画
         
-        # 绑定点击动画
-        self.bind("<Button-1>", self._on_click_animation)
+        Args:
+            widget: CTk组件
+            duration: 动画时长（秒）
+        """
+        def animate():
+            steps = 15
+            step_duration = duration / steps
+            
+            for i in range(steps + 1):
+                alpha = i / steps
+                try:
+                    widget.after(0, lambda a=alpha: widget.configure(fg_color=_get_fade_color(a)))
+                except:
+                    break
+                time.sleep(step_duration)
+        
+        def _get_fade_color(alpha):
+            # 简化版：只改变透明度效果
+            return widget.cget("fg_color")
+        
+        threading.Thread(target=animate, daemon=True).start()
     
-    def _on_click_animation(self, event):
-        """点击动画"""
-        AnimationHelper.button_ripple(self, duration_ms=200)
+    @staticmethod
+    def expand_animation(widget, target_height: int, duration: float = 0.2):
+        """
+        展开动画
+        
+        Args:
+            widget: CTk组件
+            target_height: 目标高度
+            duration: 动画时长（秒）
+        """
+        def animate():
+            steps = 10
+            step_duration = duration / steps
+            current_height = 0
+            step_height = target_height / steps
+            
+            for _ in range(steps):
+                current_height += step_height
+                try:
+                    widget.after(0, lambda h=int(current_height): widget.configure(height=h))
+                except:
+                    break
+                time.sleep(step_duration)
+            
+            # 确保最终高度准确
+            try:
+                widget.after(0, lambda: widget.configure(height=target_height))
+            except:
+                pass
+        
+        threading.Thread(target=animate, daemon=True).start()
+
 
 class AnimatedProgressBar(ctk.CTkProgressBar):
-    """带动画效果的进度条"""
+    """动画进度条 - 平滑过渡的进度条"""
     
-    def set_animated(self, value: float, duration_ms: int = 500):
-        """设置值（带动画）
+    def __init__(self, master, **kwargs):
+        super().__init__(master, **kwargs)
+        self._target_value = 0
+        self._animating = False
+        self._animation_thread = None
+    
+    def set_animated(self, value: float, duration: float = 0.3):
+        """
+        设置进度值（带动画）
         
         Args:
-            value: 目标值（0-1）
-            duration_ms: 动画持续时间（毫秒）
+            value: 目标值（0.0 - 1.0）
+            duration: 动画时长（秒）
         """
-        AnimationHelper.progress_bar_animation(self, value, duration_ms)
+        if self._animating:
+            return  # 已有动画在运行
+        
+        self._target_value = max(0.0, min(1.0, value))
+        
+        def animate():
+            self._animating = True
+            start_value = self.get()
+            steps = 20
+            step_duration = duration / steps
+            step_value = (self._target_value - start_value) / steps
+            
+            current_value = start_value
+            for _ in range(steps):
+                if not self._animating:
+                    break
+                
+                current_value += step_value
+                try:
+                    self.after(0, lambda v=current_value: self.set(v))
+                except:
+                    break
+                
+                time.sleep(step_duration)
+            
+            # 确保最终值准确
+            try:
+                self.after(0, lambda: self.set(self._target_value))
+            except:
+                pass
+            
+            self._animating = False
+        
+        self._animation_thread = threading.Thread(target=animate, daemon=True)
+        self._animation_thread.start()
+    
+    def set_instant(self, value: float):
+        """
+        立即设置进度值（无动画）
+        
+        Args:
+            value: 目标值（0.0 - 1.0）
+        """
+        self._animating = False
+        self.set(value)
+    
+    def pulse(self, duration: float = 1.0):
+        """
+        脉冲动画（用于不确定的进度）
+        
+        Args:
+            duration: 脉冲周期（秒）
+        """
+        def animate():
+            while self._animating:
+                # 从0到1再到0的循环
+                for i in range(20):
+                    if not self._animating:
+                        break
+                    value = abs((i - 10) / 10.0)
+                    try:
+                        self.after(0, lambda v=value: self.set(v))
+                    except:
+                        return
+                    time.sleep(duration / 20)
+        
+        self._animating = True
+        threading.Thread(target=animate, daemon=True).start()
+    
+    def stop_pulse(self):
+        """停止脉冲动画"""
+        self._animating = False

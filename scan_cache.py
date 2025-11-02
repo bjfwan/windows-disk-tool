@@ -1,169 +1,200 @@
-import json
+import sqlite3
 import time
 import os
 from pathlib import Path
 from typing import Optional, Dict, Tuple
 
 class ScanCache:
-    """扫描结果缓存管理 - 支持增量智能缓存"""
     
-    def __init__(self, cache_file="scan_cache.json", expire_hours=24):
+    def __init__(self, cache_file="scan_cache.db", expire_hours=24):
         self.cache_file = cache_file
         self.expire_seconds = expire_hours * 3600
-        self.cache = self._load_cache()
-        # 增量缓存：记录每个文件夹的修改时间和大小
-        self.folder_cache = self.cache.get('folders', {})
+        self.conn = None
+        import threading
+        self._lock = threading.Lock()
+        self._init_database()
     
-    def _load_cache(self) -> Dict:
-        """加载缓存文件"""
-        try:
-            if Path(self.cache_file).exists():
-                with open(self.cache_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-        except:
-            pass
-        return {}
+    def _init_database(self):
+        self.conn = sqlite3.connect(self.cache_file, check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
+        cursor = self.conn.cursor()
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS folder_cache (
+                path TEXT PRIMARY KEY,
+                size INTEGER NOT NULL,
+                mtime REAL NOT NULL,
+                cache_time REAL NOT NULL
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_folder_cache_time 
+            ON folder_cache(cache_time)
+        """)
+        
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_folder_mtime 
+            ON folder_cache(mtime)
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS general_cache (
+                key TEXT PRIMARY KEY,
+                timestamp REAL NOT NULL,
+                data TEXT NOT NULL
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_general_timestamp 
+            ON general_cache(timestamp)
+        """)
+        
+        self.conn.commit()
+        self._cleanup_expired()
     
-    def _save_cache(self):
-        """保存缓存文件"""
-        try:
-            # 保存文件夹缓存
-            self.cache['folders'] = self.folder_cache
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(self.cache, f, indent=2, ensure_ascii=False)
-        except:
-            pass
+    def _cleanup_expired(self):
+        cursor = self.conn.cursor()
+        expire_time = time.time() - self.expire_seconds
+        
+        cursor.execute("DELETE FROM folder_cache WHERE cache_time < ?", (expire_time,))
+        cursor.execute("DELETE FROM general_cache WHERE timestamp < ?", (expire_time,))
+        self.conn.commit()
     
     def get(self, key: str) -> Optional[Dict]:
-        """获取缓存数据"""
-        if key not in self.cache:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT timestamp, data FROM general_cache WHERE key = ?", 
+            (key,)
+        )
+        row = cursor.fetchone()
+        
+        if not row:
             return None
         
-        entry = self.cache[key]
-        timestamp = entry.get('timestamp', 0)
-        
-        # 检查是否过期
+        timestamp = row['timestamp']
         if time.time() - timestamp > self.expire_seconds:
-            del self.cache[key]
-            self._save_cache()
+            cursor.execute("DELETE FROM general_cache WHERE key = ?", (key,))
+            self.conn.commit()
             return None
         
-        return entry.get('data')
+        import json
+        return json.loads(row['data'])
     
     def set(self, key: str, data: Dict):
-        """设置缓存数据"""
-        self.cache[key] = {
-            'timestamp': time.time(),
-            'data': data
-        }
-        self._save_cache()
+        import json
+        with self._lock:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute(
+                    "INSERT OR REPLACE INTO general_cache (key, timestamp, data) VALUES (?, ?, ?)",
+                    (key, time.time(), json.dumps(data, ensure_ascii=False))
+                )
+                self.conn.commit()
+            except Exception as e:
+                pass
     
     def clear(self, key: Optional[str] = None):
-        """清除缓存"""
+        cursor = self.conn.cursor()
         if key:
-            if key in self.cache:
-                del self.cache[key]
+            cursor.execute("DELETE FROM general_cache WHERE key = ?", (key,))
         else:
-            self.cache = {}
-        self._save_cache()
+            cursor.execute("DELETE FROM general_cache")
+            cursor.execute("DELETE FROM folder_cache")
+        self.conn.commit()
     
     def get_cache_age(self, key: str) -> Optional[int]:
-        """获取缓存年龄（秒）"""
-        if key not in self.cache:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT timestamp FROM general_cache WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        
+        if not row:
             return None
         
-        timestamp = self.cache[key].get('timestamp', 0)
-        return int(time.time() - timestamp)
+        return int(time.time() - row['timestamp'])
     
     def has_valid_cache(self, key: str) -> bool:
-        """检查是否有有效缓存"""
         return self.get(key) is not None
     
     def _get_folder_mtime(self, path: str) -> float:
-        """获取文件夹的修改时间
-        
-        Args:
-            path: 文件夹路径
-            
-        Returns:
-            修改时间戳（秒）
-        """
         try:
             return os.path.getmtime(path)
         except (OSError, PermissionError):
             return 0
     
     def get_folder_cache(self, path: str) -> Optional[Tuple[int, float]]:
-        """获取文件夹缓存（增量缓存）
-        
-        Args:
-            path: 文件夹路径
-            
-        Returns:
-            (size, mtime) 或 None
-        """
-        if path not in self.folder_cache:
-            return None
-        
-        cached = self.folder_cache[path]
-        cached_mtime = cached.get('mtime', 0)
-        cached_size = cached.get('size', 0)
-        cached_time = cached.get('cache_time', 0)
-        
-        # 检查缓存是否过期
-        if time.time() - cached_time > self.expire_seconds:
-            return None
-        
-        # 检查文件夹是否被修改
-        current_mtime = self._get_folder_mtime(path)
-        if current_mtime > cached_mtime:
-            return None
-        
-        return (cached_size, cached_mtime)
+        with self._lock:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute(
+                    "SELECT size, mtime, cache_time FROM folder_cache WHERE path = ?",
+                    (path,)
+                )
+                row = cursor.fetchone()
+                
+                if not row:
+                    return None
+                
+                cached_size = row['size']
+                cached_mtime = row['mtime']
+                cached_time = row['cache_time']
+                
+                if time.time() - cached_time > self.expire_seconds:
+                    return None
+                
+                current_mtime = self._get_folder_mtime(path)
+                if current_mtime > cached_mtime:
+                    return None
+                
+                return (cached_size, cached_mtime)
+            except Exception as e:
+                return None
     
     def set_folder_cache(self, path: str, size: int):
-        """设置文件夹缓存（增量缓存）
-        
-        Args:
-            path: 文件夹路径
-            size: 文件夹大小（字节）
-        """
         mtime = self._get_folder_mtime(path)
-        self.folder_cache[path] = {
-            'size': size,
-            'mtime': mtime,
-            'cache_time': time.time()
-        }
-        self._save_cache()
+        with self._lock:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute(
+                    "INSERT OR REPLACE INTO folder_cache (path, size, mtime, cache_time) VALUES (?, ?, ?, ?)",
+                    (path, size, mtime, time.time())
+                )
+                self.conn.commit()
+            except Exception as e:
+                pass
     
     def is_folder_modified(self, path: str) -> bool:
-        """检查文件夹是否被修改（增量检测）
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT mtime FROM folder_cache WHERE path = ?", (path,))
+        row = cursor.fetchone()
         
-        Args:
-            path: 文件夹路径
-            
-        Returns:
-            True 表示文件夹已修改或没有缓存
-        """
-        if path not in self.folder_cache:
+        if not row:
             return True
         
-        cached_mtime = self.folder_cache[path].get('mtime', 0)
+        cached_mtime = row['mtime']
         current_mtime = self._get_folder_mtime(path)
         
         return current_mtime > cached_mtime
     
     def get_cache_stats(self) -> Dict:
-        """获取缓存统计信息
+        cursor = self.conn.cursor()
         
-        Returns:
-            缓存统计字典
-        """
-        total_folders = len(self.folder_cache)
-        valid_folders = sum(1 for path in self.folder_cache if not self.is_folder_modified(path))
+        cursor.execute("SELECT COUNT(*) as total FROM folder_cache")
+        total_folders = cursor.fetchone()['total']
+        
+        valid_folders = 0
+        cursor.execute("SELECT path FROM folder_cache")
+        for row in cursor.fetchall():
+            if not self.is_folder_modified(row['path']):
+                valid_folders += 1
         
         return {
             'total_folders': total_folders,
             'valid_folders': valid_folders,
             'hit_rate': (valid_folders / total_folders * 100) if total_folders > 0 else 0
         }
+    
+    def __del__(self):
+        if self.conn:
+            self.conn.close()

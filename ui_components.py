@@ -62,15 +62,15 @@ class DriveCard(GlassFrame):
         else:
             progress_color = (LIGHT_THEME['accent_green'], DARK_THEME['accent_green'])
         
-        progress = AnimatedProgressBar(
+        progress = ctk.CTkProgressBar(
             self, 
             height=14, 
             corner_radius=7,
             progress_color=progress_color
         )
         progress.pack(fill="x", padx=15, pady=5)
-        # 使用动画效果设置进度（缩短动画时间以减少卡顿）
-        progress.set_animated(percent / 100, duration_ms=300)
+        # 直接设置进度（禁用动画，消除卡顿）
+        progress.set(percent / 100)
         
         # 空间信息
         used_gb = drive_data['used'] / (1024**3)
@@ -128,7 +128,7 @@ class FolderItem(ctk.CTkFrame):
         left_container.pack(side="left", padx=(10 + level * 20, 0), pady=10)
         
         # 展开按钮（如果有子项）- 使用新配色
-        if folder_data.get('has_children', True):
+        if on_expand:  # 只有传入了on_expand回调才显示展开按钮
             self.expand_btn = ctk.CTkButton(
                 left_container,
                 text="▶",
@@ -141,6 +141,10 @@ class FolderItem(ctk.CTkFrame):
                 text_color=(LIGHT_THEME['text_secondary'], DARK_THEME['text_secondary'])
             )
             self.expand_btn.pack(side="left", padx=(0, 5))
+        else:
+            # 没有展开按钮时，添加占位符保持对齐
+            spacer = ctk.CTkLabel(left_container, text="", width=28)
+            spacer.pack(side="left", padx=(0, 5))
         
         # 复选框
         self.checkbox = ctk.CTkCheckBox(
